@@ -14,6 +14,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="itext7" Version="8.0.5" />
+    <!-- 提供 UniGB-UTF16-H 等 CMap；打开含中文字体编码的 PDF 时必需，版本需与 itext 核心一致 -->
+    <PackageReference Include="itext.font-asian" Version="8.0.5" />
     <PackageReference Include="Docnet.Core" Version="2.6.0" />
   </ItemGroup>
 </Project>
