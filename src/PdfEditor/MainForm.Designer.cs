@@ -20,12 +20,11 @@ partial class MainForm
     private System.Windows.Forms.ToolStripSeparator sep3;
     private System.Windows.Forms.ToolStripButton btnCancelTool;
     private System.Windows.Forms.Panel panelBody;
-    private System.Windows.Forms.FlowLayoutPanel flowPageNav;
-    private System.Windows.Forms.Button btnPrevPage;
-    private System.Windows.Forms.Button btnNextPage;
-    private System.Windows.Forms.Label lblPage;
-    private System.Windows.Forms.PictureBox picPdf;
+    private System.Windows.Forms.Panel scrollPdf;
+    private System.Windows.Forms.FlowLayoutPanel panelPagesHost;
     private System.Windows.Forms.StatusStrip statusStrip;
+    private System.Windows.Forms.ToolStripStatusLabel lblPageIndicator;
+    private System.Windows.Forms.ToolStripStatusLabel statusSpring;
     private System.Windows.Forms.ToolStripStatusLabel lblStatus;
 
     protected override void Dispose(bool disposing)
@@ -53,16 +52,14 @@ partial class MainForm
         sep3 = new System.Windows.Forms.ToolStripSeparator();
         btnCancelTool = new System.Windows.Forms.ToolStripButton();
         panelBody = new System.Windows.Forms.Panel();
-        flowPageNav = new System.Windows.Forms.FlowLayoutPanel();
-        btnPrevPage = new System.Windows.Forms.Button();
-        btnNextPage = new System.Windows.Forms.Button();
-        lblPage = new System.Windows.Forms.Label();
-        picPdf = new System.Windows.Forms.PictureBox();
+        scrollPdf = new System.Windows.Forms.Panel();
+        panelPagesHost = new System.Windows.Forms.FlowLayoutPanel();
         statusStrip = new System.Windows.Forms.StatusStrip();
+        lblPageIndicator = new System.Windows.Forms.ToolStripStatusLabel();
+        statusSpring = new System.Windows.Forms.ToolStripStatusLabel();
         lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
         panelBody.SuspendLayout();
-        flowPageNav.SuspendLayout();
-        ((System.ComponentModel.ISupportInitialize)picPdf).BeginInit();
+        scrollPdf.SuspendLayout();
         toolStrip.SuspendLayout();
         statusStrip.SuspendLayout();
         SuspendLayout();
@@ -122,69 +119,49 @@ partial class MainForm
         toolStrip.TabIndex = 0;
         toolStrip.Text = "toolStrip";
 
-        flowPageNav.AutoSize = true;
-        flowPageNav.Controls.Add(btnPrevPage);
-        flowPageNav.Controls.Add(lblPage);
-        flowPageNav.Controls.Add(btnNextPage);
-        flowPageNav.Dock = System.Windows.Forms.DockStyle.Top;
-        flowPageNav.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
-        flowPageNav.Location = new System.Drawing.Point(0, 0);
-        flowPageNav.Name = "flowPageNav";
-        flowPageNav.Padding = new System.Windows.Forms.Padding(4, 6, 4, 4);
-        flowPageNav.Size = new System.Drawing.Size(1100, 44);
-        flowPageNav.TabIndex = 0;
-        flowPageNav.WrapContents = false;
+        panelPagesHost.AutoSize = true;
+        panelPagesHost.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+        panelPagesHost.FlowDirection = System.Windows.Forms.FlowDirection.TopDown;
+        panelPagesHost.Location = new System.Drawing.Point(0, 0);
+        panelPagesHost.Margin = new System.Windows.Forms.Padding(0);
+        panelPagesHost.Name = "panelPagesHost";
+        panelPagesHost.Padding = new System.Windows.Forms.Padding(8);
+        panelPagesHost.Size = new System.Drawing.Size(1084, 16);
+        panelPagesHost.TabIndex = 0;
+        panelPagesHost.WrapContents = false;
 
-        btnPrevPage.AutoSize = true;
-        btnPrevPage.Location = new System.Drawing.Point(7, 6);
-        btnPrevPage.Name = "btnPrevPage";
-        btnPrevPage.Size = new System.Drawing.Size(72, 32);
-        btnPrevPage.TabIndex = 0;
-        btnPrevPage.Text = "上一页";
-        btnPrevPage.UseVisualStyleBackColor = true;
-        btnPrevPage.Click += BtnPrevPage_Click;
+        scrollPdf.AutoScroll = true;
+        scrollPdf.BackColor = System.Drawing.SystemColors.ControlDark;
+        scrollPdf.Dock = System.Windows.Forms.DockStyle.Fill;
+        scrollPdf.Location = new System.Drawing.Point(0, 0);
+        scrollPdf.Name = "scrollPdf";
+        scrollPdf.Size = new System.Drawing.Size(1100, 650);
+        scrollPdf.TabIndex = 0;
+        scrollPdf.Controls.Add(panelPagesHost);
+        scrollPdf.Scroll += ScrollPdf_Scroll;
 
-        lblPage.AutoSize = true;
-        lblPage.Location = new System.Drawing.Point(85, 11);
-        lblPage.Margin = new System.Windows.Forms.Padding(3, 11, 3, 0);
-        lblPage.Name = "lblPage";
-        lblPage.Size = new System.Drawing.Size(15, 17);
-        lblPage.TabIndex = 1;
-        lblPage.Text = "-";
-
-        btnNextPage.AutoSize = true;
-        btnNextPage.Location = new System.Drawing.Point(106, 6);
-        btnNextPage.Name = "btnNextPage";
-        btnNextPage.Size = new System.Drawing.Size(72, 32);
-        btnNextPage.TabIndex = 2;
-        btnNextPage.Text = "下一页";
-        btnNextPage.UseVisualStyleBackColor = true;
-        btnNextPage.Click += BtnNextPage_Click;
-
-        picPdf.BackColor = System.Drawing.SystemColors.ControlDark;
-        picPdf.Dock = System.Windows.Forms.DockStyle.Fill;
-        picPdf.Location = new System.Drawing.Point(0, 44);
-        picPdf.Name = "picPdf";
-        picPdf.Size = new System.Drawing.Size(1100, 606);
-        picPdf.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
-        picPdf.TabIndex = 1;
-        picPdf.TabStop = false;
-        picPdf.MouseDown += PicPdf_MouseDown;
-        picPdf.MouseMove += PicPdf_MouseMove;
-        picPdf.MouseUp += PicPdf_MouseUp;
-
-        panelBody.Controls.Add(picPdf);
-        panelBody.Controls.Add(flowPageNav);
+        panelBody.Controls.Add(scrollPdf);
         panelBody.Dock = System.Windows.Forms.DockStyle.Fill;
         panelBody.Location = new System.Drawing.Point(0, 28);
         panelBody.Name = "panelBody";
         panelBody.Size = new System.Drawing.Size(1100, 650);
         panelBody.TabIndex = 1;
 
+        lblPageIndicator.Name = "lblPageIndicator";
+        lblPageIndicator.Size = new System.Drawing.Size(0, 17);
+        lblPageIndicator.Text = "";
+
+        statusSpring.Name = "statusSpring";
+        statusSpring.Spring = true;
+
         lblStatus.Name = "lblStatus";
         lblStatus.Size = new System.Drawing.Size(0, 17);
+        lblStatus.Text = "";
 
-        statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { lblStatus });
+        statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[]
+        {
+            lblPageIndicator, statusSpring, lblStatus
+        });
         statusStrip.Location = new System.Drawing.Point(0, 678);
         statusStrip.Name = "statusStrip";
         statusStrip.Size = new System.Drawing.Size(1100, 22);
@@ -204,10 +181,8 @@ partial class MainForm
         FormClosing += MainForm_FormClosing;
         ResizeEnd += MainForm_ResizeEnd;
         panelBody.ResumeLayout(false);
-        panelBody.PerformLayout();
-        flowPageNav.ResumeLayout(false);
-        flowPageNav.PerformLayout();
-        ((System.ComponentModel.ISupportInitialize)picPdf).EndInit();
+        scrollPdf.ResumeLayout(false);
+        scrollPdf.PerformLayout();
         toolStrip.ResumeLayout(false);
         toolStrip.PerformLayout();
         statusStrip.ResumeLayout(false);

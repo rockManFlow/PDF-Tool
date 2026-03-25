@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.Text;
 using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.IO.Image;
@@ -40,6 +41,34 @@ public sealed class PdfEditorService : IDisposable
         }
 
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
+    }
+
+    /// <summary>Kernel PdfCanvas.ShowText(string) 对中文易触发 PdfException；用 PdfString + Identity-H，失败再退回 WinAnsi。</summary>
+    private static void CanvasShowEncodedText(PdfCanvas canvas, PdfFont font, string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return;
+
+        try
+        {
+            canvas.ShowText(new PdfString(text, PdfEncodings.IDENTITY_H));
+            return;
+        }
+        catch
+        {
+            // 标准 14 字体等
+        }
+
+        var sb = new StringBuilder(text.Length);
+        foreach (var ch in text)
+        {
+            if (ch < 256)
+                sb.Append(ch);
+            else
+                sb.Append('?');
+        }
+
+        canvas.ShowText(new PdfString(sb.ToString(), PdfEncodings.WINANSI));
     }
 
     public PdfEditorService(string workPath)
@@ -178,7 +207,7 @@ public sealed class PdfEditorService : IDisposable
             canvas.BeginText();
             canvas.SetFontAndSize(font, fontSize);
             canvas.MoveText(pdfX, pdfY);
-            canvas.ShowText(text);
+            CanvasShowEncodedText(canvas, font, text);
             canvas.EndText();
             canvas.RestoreState();
         });
@@ -201,7 +230,7 @@ public sealed class PdfEditorService : IDisposable
                 canvas.BeginText();
                 canvas.SetFontAndSize(font, fontSize);
                 canvas.MoveText(pdfRect.GetLeft(), pdfRect.GetBottom() + 2f);
-                canvas.ShowText(newText);
+                CanvasShowEncodedText(canvas, font, newText);
                 canvas.EndText();
             }
             canvas.RestoreState();
@@ -246,7 +275,7 @@ public sealed class PdfEditorService : IDisposable
                 canvas.BeginText();
                 canvas.SetFontAndSize(font, fontSize);
                 canvas.MoveText(Math.Max(36f, cx - approxWidth / 2f), Math.Max(36f, cy - fontSize / 2f));
-                canvas.ShowText(text);
+                CanvasShowEncodedText(canvas, font, text);
                 canvas.EndText();
                 canvas.RestoreState();
             }

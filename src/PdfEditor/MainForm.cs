@@ -17,78 +17,319 @@ public enum EditorTool
 
 public partial class MainForm : Form
 {
+    private const int DragThresholdPx = 6;
+
     private PdfEditorService? _service;
     private bool _isScanned;
     private EditorTool _tool = EditorTool.None;
 
-    private int _page0;
     private int _pageCount;
-    private float _pageWidthPt;
-    private float _pageHeightPt;
+    private int _lastContentWidth;
+    private readonly List<PageViewEntry> _pageEntries = new();
 
     private Point _dragStart;
     private Point _dragCurrent;
     private bool _dragging;
     private int _page0Down;
+    private PictureBox? _activePageBox;
     private readonly List<PointF> _inkPointsPdf = new();
+
+    private readonly TextBox _inlineEditor;
+    private bool _inlineSuppressLostFocus;
+    private PendingInlineEdit _pendingInline;
 
     public MainForm()
     {
         InitializeComponent();
+
+        _inlineEditor = new TextBox
+        {
+            BorderStyle = BorderStyle.FixedSingle,
+            Font = new Font("Microsoft YaHei UI", 10f),
+            Visible = false,
+            Size = new Size(320, 26),
+            Multiline = false
+        };
+        _inlineEditor.KeyDown += InlineEditor_KeyDown;
+        _inlineEditor.LostFocus += InlineEditor_LostFocus;
+        panelPagesHost.Controls.Add(_inlineEditor);
+
         UpdateUiState();
+    }
+
+    private void ScrollPdf_Scroll(object? sender, ScrollEventArgs e)
+    {
+        UpdatePageIndicator();
+    }
+
+    private sealed class PageViewEntry
+    {
+        public required PictureBox Picture { get; init; }
+        public int Page0 { get; init; }
+        public float PdfWidthPt { get; init; }
+        public float PdfHeightPt { get; init; }
+    }
+
+    private struct PendingInlineEdit
+    {
+        public int Page1Based;
+        public float PdfX;
+        public float PdfY;
+        public GeomRectangle? WhiteoutRect;
+        public float FontSize;
     }
 
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
         _service?.Dispose();
-        picPdf.Image?.Dispose();
-        picPdf.Image = null;
+        ClearDocumentPages();
     }
 
     private void MainForm_ResizeEnd(object? sender, EventArgs e)
     {
         if (_service != null && _pageCount > 0)
-            RenderCurrentPage();
+            RebuildDocumentView();
     }
 
-    private void BtnPrevPage_Click(object? sender, EventArgs e)
+    private void ClearDocumentPages()
     {
-        if (_page0 <= 0)
+        HideInlineEditor();
+        for (int i = panelPagesHost.Controls.Count - 1; i >= 0; i--)
+        {
+            var c = panelPagesHost.Controls[i];
+            if (c == _inlineEditor)
+                continue;
+            c.Dispose();
+        }
+
+        _pageEntries.Clear();
+    }
+
+    private int GetContentWidth()
+    {
+        int w = scrollPdf.ClientSize.Width - SystemInformation.VerticalScrollBarWidth - 24;
+        return Math.Max(160, w);
+    }
+
+    private void RebuildDocumentView()
+    {
+        if (_service == null || !File.Exists(_service.WorkPath) || _pageCount <= 0)
+        {
+            ClearDocumentPages();
+            lblPageIndicator.Text = "";
             return;
-        _page0--;
-        RenderCurrentPage();
-    }
+        }
 
-    private void BtnNextPage_Click(object? sender, EventArgs e)
-    {
-        if (_page0 >= _pageCount - 1)
+        int cw = GetContentWidth();
+        if (cw == _lastContentWidth && _pageEntries.Count == _pageCount && _pageCount > 0)
+        {
+            UpdatePageIndicator();
             return;
-        _page0++;
-        RenderCurrentPage();
+        }
+
+        _lastContentWidth = cw;
+        HideInlineEditor();
+
+        scrollPdf.SuspendLayout();
+        panelPagesHost.SuspendLayout();
+        try
+        {
+            ClearDocumentPages();
+            panelPagesHost.Width = cw;
+
+            for (int i = 0; i < _pageCount; i++)
+            {
+                var (pw, ph) = PdfRasterPreview.GetPageSizePts(_service.WorkPath, i);
+                Bitmap clone;
+                using (var bmp = PdfRasterPreview.RenderPageForContentWidth(_service.WorkPath, i, cw))
+                    clone = new Bitmap(bmp);
+
+                var pb = new PictureBox
+                {
+                    Image = clone,
+                    SizeMode = PictureBoxSizeMode.Normal,
+                    Size = clone.Size,
+                    Margin = new Padding(8, 8, 8, 8),
+                    BackColor = Color.White
+                };
+                pb.MouseDown += PagePicture_MouseDown;
+                pb.MouseMove += PagePicture_MouseMove;
+                pb.MouseUp += PagePicture_MouseUp;
+
+                _pageEntries.Add(new PageViewEntry
+                {
+                    Picture = pb,
+                    Page0 = i,
+                    PdfWidthPt = pw,
+                    PdfHeightPt = ph
+                });
+                panelPagesHost.Controls.Add(pb);
+            }
+
+            panelPagesHost.Controls.Add(_inlineEditor);
+            _inlineEditor.BringToFront();
+        }
+        finally
+        {
+            panelPagesHost.ResumeLayout(true);
+            scrollPdf.ResumeLayout(true);
+        }
+
+        UpdatePageIndicator();
     }
 
-    private void UpdatePageNav()
+    private void UpdatePageIndicator()
     {
-        lblPage.Text = _pageCount <= 0 ? "-" : $"{_page0 + 1} / {_pageCount}";
-        btnPrevPage.Enabled = _pageCount > 0 && _page0 > 0;
-        btnNextPage.Enabled = _pageCount > 0 && _page0 < _pageCount - 1;
+        if (_pageCount <= 0 || _pageEntries.Count == 0)
+        {
+            lblPageIndicator.Text = "";
+            return;
+        }
+
+        int yCenter = scrollPdf.VerticalScroll.Value + scrollPdf.ClientSize.Height / 2;
+        for (int i = 0; i < _pageEntries.Count; i++)
+        {
+            var pb = _pageEntries[i].Picture;
+            int top = pb.Top;
+            int bottom = top + pb.Height;
+            if (yCenter >= top && yCenter < bottom)
+            {
+                lblPageIndicator.Text = $"第 {i + 1} 页，共 {_pageCount} 页";
+                return;
+            }
+        }
+
+        lblPageIndicator.Text = $"共 {_pageCount} 页";
+    }
+
+    private PageViewEntry? FindEntry(PictureBox pb)
+    {
+        foreach (var e in _pageEntries)
+        {
+            if (e.Picture == pb)
+                return e;
+        }
+
+        return null;
+    }
+
+    private bool TryMapPictureBoxToPdf(PictureBox pb, Point clientOnPb, out PointF pdf, out int page0)
+    {
+        pdf = default;
+        page0 = 0;
+        var entry = FindEntry(pb);
+        if (entry == null || pb.Image == null)
+            return false;
+
+        if (clientOnPb.X < 0 || clientOnPb.Y < 0 || clientOnPb.X > pb.Image.Width || clientOnPb.Y > pb.Image.Height)
+            return false;
+
+        float wImg = pb.Image.Width;
+        float hImg = pb.Image.Height;
+        pdf.X = clientOnPb.X / wImg * entry.PdfWidthPt;
+        pdf.Y = entry.PdfHeightPt - (clientOnPb.Y / hImg * entry.PdfHeightPt);
+        page0 = entry.Page0;
+        return true;
+    }
+
+    private void HideInlineEditor()
+    {
+        _inlineEditor.Visible = false;
+        _inlineEditor.Text = "";
+    }
+
+    private void BeginInlineEdit(Point hostLocation, PendingInlineEdit pending)
+    {
+        _pendingInline = pending;
+        _inlineSuppressLostFocus = true;
+        _inlineEditor.Location = new Point(
+            Math.Max(0, hostLocation.X),
+            Math.Max(0, hostLocation.Y));
+        _inlineEditor.Text = "";
+        _inlineEditor.Visible = true;
+        _inlineEditor.BringToFront();
+        _inlineEditor.Focus();
+        _inlineSuppressLostFocus = false;
+    }
+
+    private void InlineEditor_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Enter)
+        {
+            e.SuppressKeyPress = true;
+            CommitInlineEdit();
+        }
+        else if (e.KeyCode == Keys.Escape)
+        {
+            e.SuppressKeyPress = true;
+            CancelInlineEdit();
+        }
+    }
+
+    private void InlineEditor_LostFocus(object? sender, EventArgs e)
+    {
+        if (_inlineSuppressLostFocus || !_inlineEditor.Visible)
+            return;
+
+        BeginInvoke(() =>
+        {
+            if (!_inlineEditor.Visible || _inlineEditor.Focused)
+                return;
+            CommitInlineEdit();
+        });
+    }
+
+    private void CommitInlineEdit()
+    {
+        if (!_inlineEditor.Visible || _service == null)
+            return;
+
+        string t = _inlineEditor.Text.TrimEnd('\r', '\n');
+        HideInlineEditor();
+
+        if (string.IsNullOrEmpty(t))
+            return;
+
+        try
+        {
+            int p = _pendingInline.Page1Based;
+            if (_pendingInline.WhiteoutRect.HasValue)
+            {
+                _service.WhiteoutAndDrawText(p, _pendingInline.WhiteoutRect.Value, t, _pendingInline.FontSize);
+            }
+            else
+            {
+                float fs = _isScanned ? 12f : 14f;
+                _service.AddTextOverlay(p, _pendingInline.PdfX, _pendingInline.PdfY, t, fs);
+            }
+
+            ReloadViewer();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "写入失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void CancelInlineEdit()
+    {
+        HideInlineEditor();
     }
 
     private void SetTool(EditorTool t)
     {
+        CancelInlineEdit();
         _tool = t;
         _dragging = false;
         _inkPointsPdf.Clear();
         lblStatus.Text = t switch
         {
-            EditorTool.Text => _isScanned
-                ? "文字：单击在页面上叠加文字（仅追加内容流，不修改原有内容）。"
-                : "文字：单击在页面顶层叠加文字。",
+            EditorTool.Text => "文字：在页面上单击，直接输入（Enter 确认，Esc 取消）。",
             EditorTool.Line => "划线：按下拖动绘制墨迹线。",
             EditorTool.Highlight => "高亮：按下拖动框选区域。",
-            EditorTool.Watermark => "水印：为全部页面添加半透明文字（扫描件允许）。",
+            EditorTool.Watermark => "水印：为全部页面添加半透明文字（扫描件）。",
             EditorTool.Image => "图片：拖动矩形区域，再选择图片文件。",
-            EditorTool.EditText => "编辑文字：拖动矩形覆盖原区域，再输入替换文字（仅文本型 PDF）。",
+            EditorTool.EditText => "编辑文字：单击在光标处插入；或拖动框选区域后输入以替换该区域（仅文本型 PDF）。",
             _ => _service == null ? "请先打开或新建 PDF。" : (_isScanned ? "扫描件模式：仅批注/划线/高亮/水印。" : "文本型 PDF：可叠加编辑、插图。")
         };
     }
@@ -117,40 +358,21 @@ public partial class MainForm : Form
     {
         if (_service == null || !File.Exists(_service.WorkPath))
         {
-            picPdf.Image?.Dispose();
-            picPdf.Image = null;
+            ClearDocumentPages();
             _pageCount = 0;
-            UpdatePageNav();
+            lblPageIndicator.Text = "";
             return;
         }
 
         try
         {
             _pageCount = PdfRasterPreview.GetPageCount(_service.WorkPath);
-            _page0 = Math.Clamp(_page0, 0, Math.Max(0, _pageCount - 1));
-            RenderCurrentPage();
+            _lastContentWidth = 0;
+            RebuildDocumentView();
         }
         catch (Exception ex)
         {
             MessageBox.Show(this, ex.Message, "预览失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-        }
-    }
-
-    private void RenderCurrentPage()
-    {
-        if (_service == null || !File.Exists(_service.WorkPath) || _pageCount <= 0)
-            return;
-
-        try
-        {
-            (_pageWidthPt, _pageHeightPt) = PdfRasterPreview.GetPageSizePts(_service.WorkPath, _page0);
-            picPdf.Image?.Dispose();
-            picPdf.Image = PdfRasterPreview.RenderPage(_service.WorkPath, _page0, picPdf.ClientSize.Width, picPdf.ClientSize.Height);
-            UpdatePageNav();
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "渲染页面失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
     }
 
@@ -163,47 +385,155 @@ public partial class MainForm : Form
         return new GeomRectangle(llx, lly, Math.Max(1f, urx - llx), Math.Max(1f, ury - lly));
     }
 
-    /// <summary>PictureBox Zoom 模式下，图像在控件客户区内的显示矩形（与 GDI+ 缩放一致）。</summary>
-    private static RectangleF GetImageDisplayRectangle(PictureBox pb)
+    private static int DistanceSq(Point a, Point b)
     {
-        if (pb.Image == null)
-            return RectangleF.Empty;
-
-        Size s = pb.ClientSize;
-        float iw = pb.Image.Width;
-        float ih = pb.Image.Height;
-        if (iw <= 0 || ih <= 0)
-            return RectangleF.Empty;
-
-        float r = Math.Min(s.Width / iw, s.Height / ih);
-        float w = iw * r;
-        float h = ih * r;
-        float x = (s.Width - w) / 2f;
-        float y = (s.Height - h) / 2f;
-        return new RectangleF(x, y, w, h);
+        int dx = a.X - b.X;
+        int dy = a.Y - b.Y;
+        return dx * dx + dy * dy;
     }
 
-    private bool TryMapToPdf(Point client, out PointF pdf, out int page0)
+    private void PagePicture_MouseDown(object? sender, MouseEventArgs e)
     {
-        pdf = default;
-        page0 = _page0;
+        if (e.Button != MouseButtons.Left || _service == null || _tool == EditorTool.None)
+            return;
 
-        if (picPdf.Image == null || _pageWidthPt <= 0 || _pageHeightPt <= 0)
-            return false;
+        if (sender is not PictureBox pb)
+            return;
 
-        var disp = GetImageDisplayRectangle(picPdf);
-        if (disp.Width <= 0 || disp.Height <= 0)
-            return false;
+        if (!TryMapPictureBoxToPdf(pb, e.Location, out var pDown, out _page0Down))
+            return;
 
-        if (client.X < disp.Left || client.X > disp.Right || client.Y < disp.Top || client.Y > disp.Bottom)
-            return false;
+        _activePageBox = pb;
+        _dragStart = e.Location;
+        _dragCurrent = e.Location;
+        _dragging = true;
 
-        float ix = (client.X - disp.Left) / disp.Width * picPdf.Image.Width;
-        float iy = (client.Y - disp.Top) / disp.Height * picPdf.Image.Height;
+        if (_tool == EditorTool.Line)
+            _inkPointsPdf.Add(pDown);
+    }
 
-        pdf.X = ix / picPdf.Image.Width * _pageWidthPt;
-        pdf.Y = _pageHeightPt - (iy / picPdf.Image.Height * _pageHeightPt);
-        return true;
+    private void PagePicture_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging || _service == null || sender is not PictureBox pb || pb != _activePageBox)
+            return;
+
+        _dragCurrent = e.Location;
+
+        if (_tool == EditorTool.Line && e.Button == MouseButtons.Left &&
+            TryMapPictureBoxToPdf(pb, e.Location, out var p, out _))
+            _inkPointsPdf.Add(p);
+    }
+
+    private void PagePicture_MouseUp(object? sender, MouseEventArgs e)
+    {
+        if (!_dragging || e.Button != MouseButtons.Left || _service == null || sender is not PictureBox pb)
+            return;
+
+        _dragging = false;
+
+        if (!TryMapPictureBoxToPdf(pb, _dragStart, out var p0, out _))
+            return;
+
+        int page1 = _page0Down + 1;
+        bool smallMove = DistanceSq(_dragStart, _dragCurrent) < DragThresholdPx * DragThresholdPx;
+
+        try
+        {
+            switch (_tool)
+            {
+                case EditorTool.Highlight:
+                    if (TryMapPictureBoxToPdf(pb, _dragCurrent, out var p1, out _))
+                    {
+                        var rect = ToPdfRectangle(p0, p1);
+                        _service.AddHighlight(page1, rect);
+                        ReloadViewer();
+                    }
+                    break;
+
+                case EditorTool.Line:
+                    if (_inkPointsPdf.Count >= 2)
+                        _service.AddInkStroke(page1, _inkPointsPdf);
+                    _inkPointsPdf.Clear();
+                    ReloadViewer();
+                    break;
+
+                case EditorTool.Text:
+                    if (smallMove && TryMapPictureBoxToPdf(pb, _dragCurrent, out var pText, out _))
+                    {
+                        Point screen = pb.PointToScreen(new Point(_dragCurrent.X, _dragCurrent.Y));
+                        Point host = panelPagesHost.PointToClient(screen);
+                        BeginInlineEdit(host, new PendingInlineEdit
+                        {
+                            Page1Based = page1,
+                            PdfX = pText.X,
+                            PdfY = pText.Y,
+                            WhiteoutRect = null,
+                            FontSize = 14f
+                        });
+                    }
+                    break;
+
+                case EditorTool.Image:
+                    if (!smallMove && TryMapPictureBoxToPdf(pb, _dragCurrent, out var p1b, out _))
+                    {
+                        using var ofd = new OpenFileDialog
+                        {
+                            Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
+                            Title = "选择图片"
+                        };
+                        if (ofd.ShowDialog() == DialogResult.OK)
+                        {
+                            var rect = ToPdfRectangle(p0, p1b);
+                            _service.AddImageOverlay(page1, ofd.FileName, rect);
+                            ReloadViewer();
+                        }
+                    }
+                    break;
+
+                case EditorTool.EditText:
+                    if (!_isScanned)
+                    {
+                        if (smallMove && TryMapPictureBoxToPdf(pb, _dragCurrent, out var pIns, out _))
+                        {
+                            Point screen = pb.PointToScreen(new Point(_dragCurrent.X, _dragCurrent.Y));
+                            Point host = panelPagesHost.PointToClient(screen);
+                            BeginInlineEdit(host, new PendingInlineEdit
+                            {
+                                Page1Based = page1,
+                                PdfX = pIns.X,
+                                PdfY = pIns.Y,
+                                WhiteoutRect = null,
+                                FontSize = 14f
+                            });
+                        }
+                        else if (!smallMove && TryMapPictureBoxToPdf(pb, _dragCurrent, out var p2, out _))
+                        {
+                            var rect = ToPdfRectangle(p0, p2);
+                            float fs = Math.Clamp(rect.GetHeight() * 0.55f, 8f, 28f);
+                            int lx = Math.Min(_dragStart.X, _dragCurrent.X);
+                            int by = Math.Max(_dragStart.Y, _dragCurrent.Y);
+                            Point blClient = new Point(lx, by);
+                            Point screen = pb.PointToScreen(blClient);
+                            Point host = panelPagesHost.PointToClient(screen);
+                            BeginInlineEdit(host, new PendingInlineEdit
+                            {
+                                Page1Based = page1,
+                                PdfX = 0,
+                                PdfY = 0,
+                                WhiteoutRect = rect,
+                                FontSize = fs
+                            });
+                        }
+                    }
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+
+        _activePageBox = null;
     }
 
     private void BtnOpen_Click(object? sender, EventArgs e)
@@ -219,16 +549,16 @@ public partial class MainForm : Form
         try
         {
             _service?.Dispose();
-            picPdf.Image?.Dispose();
-            picPdf.Image = null;
-            _page0 = 0;
+            ClearDocumentPages();
+            _pageCount = 0;
+            _lastContentWidth = 0;
             _service = PdfEditorService.CreateWorkCopy(dlg.FileName);
             _isScanned = PdfScanDetector.IsScannedPdf(_service.WorkPath);
             ReloadViewer();
             SetTool(EditorTool.None);
             lblStatus.Text = _isScanned
-                ? "已打开（判定为扫描件/图片型）：仅批注、划线、高亮、水印。"
-                : "已打开（文本型）：可编辑叠加、插图、划线、高亮。";
+                ? "已打开（扫描件/图片型）：仅批注、划线、高亮、水印。"
+                : "已打开（文本型）：可叠加编辑、插图、划线、高亮。";
             UpdateUiState();
         }
         catch (Exception ex)
@@ -267,9 +597,9 @@ public partial class MainForm : Form
         try
         {
             _service?.Dispose();
-            picPdf.Image?.Dispose();
-            picPdf.Image = null;
-            _page0 = 0;
+            ClearDocumentPages();
+            _pageCount = 0;
+            _lastContentWidth = 0;
             string path = Path.Combine(Path.GetTempPath(), "PdfEditor_new_" + Guid.NewGuid().ToString("N") + ".pdf");
             _service = PdfEditorService.CreateNewBlank(path, 1);
             _isScanned = false;
@@ -338,115 +668,5 @@ public partial class MainForm : Form
         if (_service == null || _isScanned)
             return;
         SetTool(EditorTool.EditText);
-    }
-
-    private void PicPdf_MouseDown(object? sender, MouseEventArgs e)
-    {
-        if (e.Button != MouseButtons.Left || _service == null || _tool == EditorTool.None)
-            return;
-
-        if (!TryMapToPdf(e.Location, out var pDown, out _page0Down))
-            return;
-
-        _dragStart = e.Location;
-        _dragCurrent = e.Location;
-        _dragging = true;
-
-        if (_tool == EditorTool.Line)
-            _inkPointsPdf.Add(pDown);
-    }
-
-    private void PicPdf_MouseMove(object? sender, MouseEventArgs e)
-    {
-        if (!_dragging || _service == null)
-            return;
-
-        _dragCurrent = e.Location;
-
-        if (_tool == EditorTool.Line && e.Button == MouseButtons.Left && TryMapToPdf(e.Location, out var p, out _))
-            _inkPointsPdf.Add(p);
-    }
-
-    private void PicPdf_MouseUp(object? sender, MouseEventArgs e)
-    {
-        if (!_dragging || e.Button != MouseButtons.Left || _service == null)
-            return;
-
-        _dragging = false;
-
-        if (!TryMapToPdf(_dragStart, out var p0, out _))
-            return;
-
-        int page1 = _page0Down + 1;
-
-        try
-        {
-            switch (_tool)
-            {
-                case EditorTool.Highlight:
-                    if (TryMapToPdf(_dragCurrent, out var p1, out _))
-                    {
-                        var rect = ToPdfRectangle(p0, p1);
-                        _service.AddHighlight(page1, rect);
-                        ReloadViewer();
-                    }
-                    break;
-
-                case EditorTool.Line:
-                    if (_inkPointsPdf.Count >= 2)
-                        _service.AddInkStroke(page1, _inkPointsPdf);
-                    _inkPointsPdf.Clear();
-                    ReloadViewer();
-                    break;
-
-                case EditorTool.Text:
-                {
-                    string? t = PromptDialog.Ask(this, "输入文字：", "文字", "备注");
-                    if (string.IsNullOrWhiteSpace(t))
-                        break;
-
-                    _service.AddTextOverlay(page1, p0.X, p0.Y, t.Trim(), _isScanned ? 12f : 14f);
-                    ReloadViewer();
-                    break;
-                }
-
-                case EditorTool.Image:
-                {
-                    if (!TryMapToPdf(_dragCurrent, out var p1b, out _))
-                        break;
-                    using var ofd = new OpenFileDialog
-                    {
-                        Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.gif|所有文件|*.*",
-                        Title = "选择图片"
-                    };
-                    if (ofd.ShowDialog() != DialogResult.OK)
-                        break;
-
-                    var rect = ToPdfRectangle(p0, p1b);
-                    _service.AddImageOverlay(page1, ofd.FileName, rect);
-                    ReloadViewer();
-                    break;
-                }
-
-                case EditorTool.EditText:
-                {
-                    if (!TryMapToPdf(_dragCurrent, out var p1c, out _))
-                        break;
-                    string? nt = PromptDialog.Ask(this, "输入替换文字（可为空，仅涂白）：", "编辑文字", "");
-                    if (nt == null)
-                        break;
-
-                    var rect = ToPdfRectangle(p0, p1c);
-                    float fs = Math.Clamp(rect.GetHeight() * 0.6f, 8f, 24f);
-                    _service.WhiteoutAndDrawText(page1, rect, nt, fs);
-                    ReloadViewer();
-                    break;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(this, ex.Message, "操作失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
     }
 }

@@ -64,4 +64,10 @@ public static class PdfRasterPreview
 
         return bmp;
     }
+
+    /// <summary>按固定栏宽渲染整页（用于纵向连续滚动列表）。</summary>
+    public static Bitmap RenderPageForContentWidth(string pdfPath, int page0, int contentWidth)
+    {
+        return RenderPage(pdfPath, page0, contentWidth, 100_000);
+    }
 }
