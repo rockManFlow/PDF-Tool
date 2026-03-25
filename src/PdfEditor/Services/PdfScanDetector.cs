@@ -30,13 +30,26 @@ public static class PdfScanDetector
         for (int i = 1; i <= n; i++)
         {
             var page = pdf.GetPage(i);
-            string text = PdfTextExtractor.GetTextFromPage(page).Trim();
+            string text = TryGetPageText(page).Trim();
             bool hasRenderedImage = PageHasRenderedImage(page);
             if (text.Length <= MaxCharsForScannedPage && hasRenderedImage)
                 scannedVotes++;
         }
 
         return scannedVotes >= Math.Ceiling(n * ScannedPageRatioThreshold);
+    }
+
+    private static string TryGetPageText(PdfPage page)
+    {
+        try
+        {
+            return PdfTextExtractor.GetTextFromPage(page) ?? "";
+        }
+        catch
+        {
+            // 编码异常、损坏内容流等：按无文本处理，仍允许打开与预览
+            return "";
+        }
     }
 
     private static bool PageHasRenderedImage(PdfPage page)

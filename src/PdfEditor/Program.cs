@@ -8,6 +8,8 @@ internal static class Program
     [STAThread]
     private static void Main()
     {
+        PdfTextEncodingBootstrap.Register();
+
         // 含中文等 CJK 编码的 PDF 会引用 UniGB-UTF16-H 等 CMap；资源在 itext.font_asian 中，需尽早加载该程序集
         try
         {
