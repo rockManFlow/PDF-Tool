@@ -1,4 +1,5 @@
 using System.Drawing;
+using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.IO.Image;
 using iText.Kernel.Colors;
@@ -149,7 +150,9 @@ public sealed class PdfEditorService : IDisposable
             stroke.Add(new PdfNumber(pt.Y));
         }
 
-        var inkList = new List<PdfArray> { stroke };
+        // InkList：PDF 中为「笔画数组的数组」；iText 构造函数接受外层 PdfArray，元素为各笔画的 PdfArray
+        var inkList = new PdfArray();
+        inkList.Add(stroke);
 
         Rewrite(pdf =>
         {

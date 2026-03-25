@@ -44,7 +44,7 @@ public static class PdfRasterPreview
             targetW = (int)(targetH * pw / ph);
         }
 
-        using var docReader = DocLib.GetDocReader(pdfPath, new PageDimensions(targetW, targetH));
+        using var docReader = DocLib.Instance.GetDocReader(pdfPath, new PageDimensions(targetW, targetH));
         using var pageReader = docReader.GetPageReader(page0);
         int w = pageReader.GetPageWidth();
         int h = pageReader.GetPageHeight();
