@@ -44,22 +44,21 @@ public sealed class PdfEditorService : IDisposable
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
     }
 
-    /// <summary>使用 Layout 引擎写入 Unicode 文本（比 Kernel ShowText 可靠，尤其中文）。</summary>
-    private static void LayoutDrawText(PdfDocument pdfDoc, PdfPage page, int page1Based, PdfFont font, float fontSize, string text, float leftPdf, float bottomPdf, float maxWidthPt)
+    /// <summary>
+    /// 使用 Layout 在指定矩形内写入 Unicode 文本。
+    /// 使用「局部 Rectangle + Canvas」而非 Paragraph.SetFixedPosition：后者在 NewContentStreamAfter 上易与页码关联异常导致不绘制。
+    /// </summary>
+    private static void LayoutDrawText(PdfDocument pdfDoc, PdfPage page, PdfFont font, float fontSize, string text, PdfRectangle layoutArea)
     {
         if (string.IsNullOrEmpty(text))
             return;
 
-        var pageSize = page.GetPageSize();
         var pdfCanvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdfDoc);
-        using (var layoutCanvas = new Canvas(pdfCanvas, pageSize))
+        using (var layoutCanvas = new Canvas(pdfCanvas, layoutArea))
         {
             layoutCanvas.SetFont(font);
             layoutCanvas.SetFontSize(fontSize);
-            var para = new Paragraph(text);
-            float w = Math.Max(40f, maxWidthPt);
-            para.SetFixedPosition(page1Based, leftPdf, bottomPdf, w);
-            layoutCanvas.Add(para);
+            layoutCanvas.Add(new Paragraph(text));
         }
     }
 
@@ -195,8 +194,10 @@ public sealed class PdfEditorService : IDisposable
             var page = pdf.GetPage(page1Based);
             var font = CreateUiFont();
             var box = page.GetPageSize();
-            float maxW = box.GetWidth() - pdfX;
-            LayoutDrawText(pdf, page, page1Based, font, fontSize, text, pdfX, pdfY, maxW);
+            float w = Math.Max(40f, box.GetWidth() - pdfX);
+            float h = Math.Max(72f, box.GetHeight() - pdfY - 4f);
+            var area = new PdfRectangle(pdfX, pdfY, w, h);
+            LayoutDrawText(pdf, page, font, fontSize, text, area);
         });
     }
 
@@ -215,8 +216,10 @@ public sealed class PdfEditorService : IDisposable
             canvas.RestoreState();
             if (!string.IsNullOrEmpty(newText))
             {
-                float maxW = Math.Max(40f, pdfRect.GetWidth());
-                LayoutDrawText(pdf, page, page1Based, font, fontSize, newText, pdfRect.GetLeft(), pdfRect.GetBottom() + 2f, maxW);
+                float bw = Math.Max(40f, pdfRect.GetWidth());
+                float bh = Math.Max(fontSize * 3f, pdfRect.GetHeight() + 6f);
+                var area = new PdfRectangle(pdfRect.GetLeft(), pdfRect.GetBottom(), bw, bh);
+                LayoutDrawText(pdf, page, font, fontSize, newText, area);
             }
         });
     }
@@ -255,14 +258,16 @@ public sealed class PdfEditorService : IDisposable
                 var gs = new PdfExtGState();
                 gs.SetFillOpacity(opacity);
                 pdfCanvas.SetExtGState(gs);
-                using (var layoutCanvas = new Canvas(pdfCanvas, size))
+                float llx = Math.Max(36f, cx - approxWidth / 2f - 18f);
+                float lly = Math.Max(36f, cy - fontSize * 1.1f);
+                float wBox = Math.Min(size.GetWidth() - 72f, approxWidth + 36f);
+                float hBox = fontSize * 2.5f;
+                var warea = new PdfRectangle(llx, lly, wBox, hBox);
+                using (var layoutCanvas = new Canvas(pdfCanvas, warea))
                 {
                     layoutCanvas.SetFont(font);
                     layoutCanvas.SetFontSize(fontSize);
-                    var par = new Paragraph(text);
-                    par.SetFontColor(ColorConstants.GRAY);
-                    par.SetFixedPosition(i, Math.Max(36f, cx - approxWidth / 2f), Math.Max(36f, cy - fontSize / 2f), size.GetWidth() - 72f);
-                    layoutCanvas.Add(par);
+                    layoutCanvas.Add(new Paragraph(text).SetFontColor(ColorConstants.GRAY));
                 }
 
                 pdfCanvas.RestoreState();

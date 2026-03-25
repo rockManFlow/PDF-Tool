@@ -282,12 +282,11 @@ public partial class MainForm : Form
 
     private void InlineEditor_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.Enter && e.Control)
-        {
-            e.SuppressKeyPress = true;
-            CommitInlineEdit();
-        }
-        else if (e.KeyCode == Keys.Enter && !_inlineEditor.Multiline)
+        // 与常见编辑器一致：Enter 提交；Shift+Enter 换行（避免误以为「编辑无效」）。
+        if (e.KeyCode == Keys.Enter && e.Shift)
+            return;
+
+        if (e.KeyCode == Keys.Enter)
         {
             e.SuppressKeyPress = true;
             CommitInlineEdit();
@@ -332,7 +331,7 @@ public partial class MainForm : Form
             }
             else
             {
-                float fs = _isScanned ? 12f : 14f;
+                float fs = _pendingInline.FontSize > 0 ? _pendingInline.FontSize : (_isScanned ? 12f : 14f);
                 _service.AddTextOverlay(p, _pendingInline.PdfX, _pendingInline.PdfY, t, fs);
             }
 
@@ -357,12 +356,12 @@ public partial class MainForm : Form
         _inkPointsPdf.Clear();
         lblStatus.Text = t switch
         {
-            EditorTool.Text => "文字：单击页面输入；多行时 Ctrl+Enter 确认，Esc 取消。",
+            EditorTool.Text => "文字：单击页面输入；Enter 写入 PDF，Shift+Enter 换行，Esc 取消；完成后「另存为」保存。",
             EditorTool.Line => "划线：按下拖动绘制墨迹线。",
             EditorTool.Highlight => "高亮：按下拖动框选区域。",
             EditorTool.Watermark => "水印：为全部页面添加半透明文字（扫描件）。",
             EditorTool.Image => "图片：拖动矩形区域，再选择图片文件。",
-            EditorTool.EditText => "编辑文字：单击插入；框选后输入替换白底区域（仅文本型）。多行 Ctrl+Enter 确认，Esc 取消；完成后用「另存为」保存。",
+            EditorTool.EditText => "编辑文字（非 Word）：单击叠加新字；框选后输入可白底覆盖原区域（仅文本型）。Enter 确认，Shift+Enter 换行；另存为保存。",
             _ => _service == null ? "请先打开或新建 PDF。" : (_isScanned ? "扫描件模式：仅批注/划线/高亮/水印。" : "文本型 PDF：可叠加编辑、插图。")
         };
     }
