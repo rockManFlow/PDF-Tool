@@ -10,7 +10,6 @@ using iText.Kernel.Pdf.Annot;
 using iText.Kernel.Pdf.Canvas;
 using iText.Kernel.Pdf.Extgstate;
 using iText.Layout;
-using iText.Layout.Canvas;
 using iText.Layout.Element;
 
 namespace PdfEditor.Services;
