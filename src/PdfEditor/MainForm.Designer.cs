@@ -18,7 +18,12 @@ partial class MainForm
     private System.Windows.Forms.ToolStripButton btnEditText;
     private System.Windows.Forms.ToolStripSeparator sep3;
     private System.Windows.Forms.ToolStripButton btnCancelTool;
-    private PdfiumViewer.PdfViewer pdfViewer;
+    private System.Windows.Forms.Panel panelBody;
+    private System.Windows.Forms.FlowLayoutPanel flowPageNav;
+    private System.Windows.Forms.Button btnPrevPage;
+    private System.Windows.Forms.Button btnNextPage;
+    private System.Windows.Forms.Label lblPage;
+    private System.Windows.Forms.PictureBox picPdf;
     private System.Windows.Forms.StatusStrip statusStrip;
     private System.Windows.Forms.ToolStripStatusLabel lblStatus;
 
@@ -46,9 +51,17 @@ partial class MainForm
         btnEditText = new System.Windows.Forms.ToolStripButton();
         sep3 = new System.Windows.Forms.ToolStripSeparator();
         btnCancelTool = new System.Windows.Forms.ToolStripButton();
-        pdfViewer = new PdfiumViewer.PdfViewer();
+        panelBody = new System.Windows.Forms.Panel();
+        flowPageNav = new System.Windows.Forms.FlowLayoutPanel();
+        btnPrevPage = new System.Windows.Forms.Button();
+        btnNextPage = new System.Windows.Forms.Button();
+        lblPage = new System.Windows.Forms.Label();
+        picPdf = new System.Windows.Forms.PictureBox();
         statusStrip = new System.Windows.Forms.StatusStrip();
         lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
+        panelBody.SuspendLayout();
+        flowPageNav.SuspendLayout();
+        ((System.ComponentModel.ISupportInitialize)picPdf).BeginInit();
         toolStrip.SuspendLayout();
         statusStrip.SuspendLayout();
         SuspendLayout();
@@ -108,20 +121,70 @@ partial class MainForm
         toolStrip.TabIndex = 0;
         toolStrip.Text = "toolStrip";
 
-        pdfViewer.Dock = System.Windows.Forms.DockStyle.Fill;
-        pdfViewer.Location = new System.Drawing.Point(0, 28);
-        pdfViewer.Name = "pdfViewer";
-        pdfViewer.Size = new System.Drawing.Size(1100, 622);
-        pdfViewer.TabIndex = 1;
-        pdfViewer.MouseDown += PdfViewer_MouseDown;
-        pdfViewer.MouseMove += PdfViewer_MouseMove;
-        pdfViewer.MouseUp += PdfViewer_MouseUp;
+        flowPageNav.AutoSize = true;
+        flowPageNav.Controls.Add(btnPrevPage);
+        flowPageNav.Controls.Add(lblPage);
+        flowPageNav.Controls.Add(btnNextPage);
+        flowPageNav.Dock = System.Windows.Forms.DockStyle.Top;
+        flowPageNav.FlowDirection = System.Windows.Forms.FlowDirection.LeftToRight;
+        flowPageNav.Location = new System.Drawing.Point(0, 0);
+        flowPageNav.Name = "flowPageNav";
+        flowPageNav.Padding = new System.Windows.Forms.Padding(4, 6, 4, 4);
+        flowPageNav.Size = new System.Drawing.Size(1100, 44);
+        flowPageNav.TabIndex = 0;
+        flowPageNav.WrapContents = false;
+
+        btnPrevPage.AutoSize = true;
+        btnPrevPage.Location = new System.Drawing.Point(7, 6);
+        btnPrevPage.Name = "btnPrevPage";
+        btnPrevPage.Size = new System.Drawing.Size(72, 32);
+        btnPrevPage.TabIndex = 0;
+        btnPrevPage.Text = "上一页";
+        btnPrevPage.UseVisualStyleBackColor = true;
+        btnPrevPage.Click += BtnPrevPage_Click;
+
+        lblPage.AutoSize = true;
+        lblPage.Location = new System.Drawing.Point(85, 11);
+        lblPage.Margin = new System.Windows.Forms.Padding(3, 11, 3, 0);
+        lblPage.Name = "lblPage";
+        lblPage.Size = new System.Drawing.Size(15, 17);
+        lblPage.TabIndex = 1;
+        lblPage.Text = "-";
+
+        btnNextPage.AutoSize = true;
+        btnNextPage.Location = new System.Drawing.Point(106, 6);
+        btnNextPage.Name = "btnNextPage";
+        btnNextPage.Size = new System.Drawing.Size(72, 32);
+        btnNextPage.TabIndex = 2;
+        btnNextPage.Text = "下一页";
+        btnNextPage.UseVisualStyleBackColor = true;
+        btnNextPage.Click += BtnNextPage_Click;
+
+        picPdf.BackColor = System.Drawing.SystemColors.ControlDark;
+        picPdf.Dock = System.Windows.Forms.DockStyle.Fill;
+        picPdf.Location = new System.Drawing.Point(0, 44);
+        picPdf.Name = "picPdf";
+        picPdf.Size = new System.Drawing.Size(1100, 606);
+        picPdf.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
+        picPdf.TabIndex = 1;
+        picPdf.TabStop = false;
+        picPdf.MouseDown += PicPdf_MouseDown;
+        picPdf.MouseMove += PicPdf_MouseMove;
+        picPdf.MouseUp += PicPdf_MouseUp;
+
+        panelBody.Controls.Add(picPdf);
+        panelBody.Controls.Add(flowPageNav);
+        panelBody.Dock = System.Windows.Forms.DockStyle.Fill;
+        panelBody.Location = new System.Drawing.Point(0, 28);
+        panelBody.Name = "panelBody";
+        panelBody.Size = new System.Drawing.Size(1100, 650);
+        panelBody.TabIndex = 1;
 
         lblStatus.Name = "lblStatus";
         lblStatus.Size = new System.Drawing.Size(0, 17);
 
         statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] { lblStatus });
-        statusStrip.Location = new System.Drawing.Point(0, 650);
+        statusStrip.Location = new System.Drawing.Point(0, 678);
         statusStrip.Name = "statusStrip";
         statusStrip.Size = new System.Drawing.Size(1100, 22);
         statusStrip.TabIndex = 2;
@@ -129,8 +192,8 @@ partial class MainForm
 
         AutoScaleDimensions = new System.Drawing.SizeF(7F, 17F);
         AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-        ClientSize = new System.Drawing.Size(1100, 672);
-        Controls.Add(pdfViewer);
+        ClientSize = new System.Drawing.Size(1100, 700);
+        Controls.Add(panelBody);
         Controls.Add(statusStrip);
         Controls.Add(toolStrip);
         MinimumSize = new System.Drawing.Size(800, 500);
@@ -138,6 +201,12 @@ partial class MainForm
         StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
         Text = "离线 PDF 编辑 (iText7)";
         FormClosing += MainForm_FormClosing;
+        ResizeEnd += MainForm_ResizeEnd;
+        panelBody.ResumeLayout(false);
+        panelBody.PerformLayout();
+        flowPageNav.ResumeLayout(false);
+        flowPageNav.PerformLayout();
+        ((System.ComponentModel.ISupportInitialize)picPdf).EndInit();
         toolStrip.ResumeLayout(false);
         toolStrip.PerformLayout();
         statusStrip.ResumeLayout(false);

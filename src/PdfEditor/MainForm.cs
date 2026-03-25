@@ -1,6 +1,5 @@
 using System.Drawing;
 using PdfEditor.Services;
-using PdfiumViewer;
 using GeomRectangle = iText.Kernel.Geom.Rectangle;
 
 namespace PdfEditor;
@@ -22,6 +21,11 @@ public partial class MainForm : Form
     private bool _isScanned;
     private EditorTool _tool = EditorTool.None;
 
+    private int _page0;
+    private int _pageCount;
+    private float _pageWidthPt;
+    private float _pageHeightPt;
+
     private Point _dragStart;
     private Point _dragCurrent;
     private bool _dragging;
@@ -37,7 +41,37 @@ public partial class MainForm : Form
     private void MainForm_FormClosing(object? sender, FormClosingEventArgs e)
     {
         _service?.Dispose();
-        pdfViewer.Document?.Dispose();
+        picPdf.Image?.Dispose();
+        picPdf.Image = null;
+    }
+
+    private void MainForm_ResizeEnd(object? sender, EventArgs e)
+    {
+        if (_service != null && _pageCount > 0)
+            RenderCurrentPage();
+    }
+
+    private void BtnPrevPage_Click(object? sender, EventArgs e)
+    {
+        if (_page0 <= 0)
+            return;
+        _page0--;
+        RenderCurrentPage();
+    }
+
+    private void BtnNextPage_Click(object? sender, EventArgs e)
+    {
+        if (_page0 >= _pageCount - 1)
+            return;
+        _page0++;
+        RenderCurrentPage();
+    }
+
+    private void UpdatePageNav()
+    {
+        lblPage.Text = _pageCount <= 0 ? "-" : $"{_page0 + 1} / {_pageCount}";
+        btnPrevPage.Enabled = _pageCount > 0 && _page0 > 0;
+        btnNextPage.Enabled = _pageCount > 0 && _page0 < _pageCount - 1;
     }
 
     private void SetTool(EditorTool t)
@@ -82,10 +116,42 @@ public partial class MainForm : Form
     private void ReloadViewer()
     {
         if (_service == null || !File.Exists(_service.WorkPath))
+        {
+            picPdf.Image?.Dispose();
+            picPdf.Image = null;
+            _pageCount = 0;
+            UpdatePageNav();
+            return;
+        }
+
+        try
+        {
+            _pageCount = PdfRasterPreview.GetPageCount(_service.WorkPath);
+            _page0 = Math.Clamp(_page0, 0, Math.Max(0, _pageCount - 1));
+            RenderCurrentPage();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "预览失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    private void RenderCurrentPage()
+    {
+        if (_service == null || !File.Exists(_service.WorkPath) || _pageCount <= 0)
             return;
 
-        pdfViewer.Document?.Dispose();
-        pdfViewer.Document = PdfDocument.Load(_service.WorkPath);
+        try
+        {
+            (_pageWidthPt, _pageHeightPt) = PdfRasterPreview.GetPageSizePts(_service.WorkPath, _page0);
+            picPdf.Image?.Dispose();
+            picPdf.Image = PdfRasterPreview.RenderPage(_service.WorkPath, _page0, picPdf.ClientSize.Width, picPdf.ClientSize.Height);
+            UpdatePageNav();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, ex.Message, "渲染页面失败", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
     }
 
     private static GeomRectangle ToPdfRectangle(PointF a, PointF b)
@@ -97,23 +163,47 @@ public partial class MainForm : Form
         return new GeomRectangle(llx, lly, Math.Max(1f, urx - llx), Math.Max(1f, ury - lly));
     }
 
+    /// <summary>PictureBox Zoom 模式下，图像在控件客户区内的显示矩形（与 GDI+ 缩放一致）。</summary>
+    private static RectangleF GetImageDisplayRectangle(PictureBox pb)
+    {
+        if (pb.Image == null)
+            return RectangleF.Empty;
+
+        Size s = pb.ClientSize;
+        float iw = pb.Image.Width;
+        float ih = pb.Image.Height;
+        if (iw <= 0 || ih <= 0)
+            return RectangleF.Empty;
+
+        float r = Math.Min(s.Width / iw, s.Height / ih);
+        float w = iw * r;
+        float h = ih * r;
+        float x = (s.Width - w) / 2f;
+        float y = (s.Height - h) / 2f;
+        return new RectangleF(x, y, w, h);
+    }
+
     private bool TryMapToPdf(Point client, out PointF pdf, out int page0)
     {
         pdf = default;
-        page0 = 0;
-        if (pdfViewer.Document == null || pdfViewer.Renderer == null)
+        page0 = _page0;
+
+        if (picPdf.Image == null || _pageWidthPt <= 0 || _pageHeightPt <= 0)
             return false;
 
-        try
-        {
-            pdf = pdfViewer.Renderer.PointToPdf(client);
-            page0 = pdfViewer.Renderer.Page;
-            return true;
-        }
-        catch
-        {
+        var disp = GetImageDisplayRectangle(picPdf);
+        if (disp.Width <= 0 || disp.Height <= 0)
             return false;
-        }
+
+        if (client.X < disp.Left || client.X > disp.Right || client.Y < disp.Top || client.Y > disp.Bottom)
+            return false;
+
+        float ix = (client.X - disp.Left) / disp.Width * picPdf.Image.Width;
+        float iy = (client.Y - disp.Top) / disp.Height * picPdf.Image.Height;
+
+        pdf.X = ix / picPdf.Image.Width * _pageWidthPt;
+        pdf.Y = _pageHeightPt - (iy / picPdf.Image.Height * _pageHeightPt);
+        return true;
     }
 
     private void BtnOpen_Click(object? sender, EventArgs e)
@@ -129,7 +219,9 @@ public partial class MainForm : Form
         try
         {
             _service?.Dispose();
-            pdfViewer.Document?.Dispose();
+            picPdf.Image?.Dispose();
+            picPdf.Image = null;
+            _page0 = 0;
             _service = PdfEditorService.CreateWorkCopy(dlg.FileName);
             _isScanned = PdfScanDetector.IsScannedPdf(_service.WorkPath);
             ReloadViewer();
@@ -175,7 +267,9 @@ public partial class MainForm : Form
         try
         {
             _service?.Dispose();
-            pdfViewer.Document?.Dispose();
+            picPdf.Image?.Dispose();
+            picPdf.Image = null;
+            _page0 = 0;
             string path = Path.Combine(Path.GetTempPath(), "PdfEditor_new_" + Guid.NewGuid().ToString("N") + ".pdf");
             _service = PdfEditorService.CreateNewBlank(path, 1);
             _isScanned = false;
@@ -246,7 +340,7 @@ public partial class MainForm : Form
         SetTool(EditorTool.EditText);
     }
 
-    private void PdfViewer_MouseDown(object? sender, MouseEventArgs e)
+    private void PicPdf_MouseDown(object? sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left || _service == null || _tool == EditorTool.None)
             return;
@@ -262,7 +356,7 @@ public partial class MainForm : Form
             _inkPointsPdf.Add(pDown);
     }
 
-    private void PdfViewer_MouseMove(object? sender, MouseEventArgs e)
+    private void PicPdf_MouseMove(object? sender, MouseEventArgs e)
     {
         if (!_dragging || _service == null)
             return;
@@ -273,7 +367,7 @@ public partial class MainForm : Form
             _inkPointsPdf.Add(p);
     }
 
-    private void PdfViewer_MouseUp(object? sender, MouseEventArgs e)
+    private void PicPdf_MouseUp(object? sender, MouseEventArgs e)
     {
         if (!_dragging || e.Button != MouseButtons.Left || _service == null)
             return;
@@ -343,7 +437,7 @@ public partial class MainForm : Form
                         break;
 
                     var rect = ToPdfRectangle(p0, p1c);
-                    float fs = Math.Max(8f, Math.Min(24f, rect.GetHeight() * 0.6f));
+                    float fs = Math.Clamp(rect.GetHeight() * 0.6f, 8f, 24f);
                     _service.WhiteoutAndDrawText(page1, rect, nt, fs);
                     ReloadViewer();
                     break;
