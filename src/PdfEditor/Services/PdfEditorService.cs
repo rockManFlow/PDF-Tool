@@ -29,10 +29,10 @@ public sealed class PdfEditorService : IDisposable
             string fonts = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
             string yahei = Path.Combine(fonts, "msyh.ttc");
             if (File.Exists(yahei))
-                return PdfFontFactory.CreateFont(yahei + ",0", PdfEncodings.IDENTITY_H, true);
+                return PdfFontFactory.CreateFont(yahei + ",0", PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
             string simsun = Path.Combine(fonts, "simsun.ttc");
             if (File.Exists(simsun))
-                return PdfFontFactory.CreateFont(simsun + ",0", PdfEncodings.IDENTITY_H, true);
+                return PdfFontFactory.CreateFont(simsun + ",0", PdfEncodings.IDENTITY_H, PdfFontFactory.EmbeddingStrategy.PREFER_EMBEDDED);
         }
         catch
         {
