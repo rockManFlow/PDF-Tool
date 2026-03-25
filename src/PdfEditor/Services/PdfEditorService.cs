@@ -3,8 +3,8 @@ using iText.IO.Font.Constants;
 using iText.IO.Image;
 using iText.Kernel.Colors;
 using iText.Kernel.Font;
-using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
+using PdfRectangle = iText.Kernel.Geom.Rectangle;
 using iText.Kernel.Pdf.Annot;
 using iText.Kernel.Pdf.Canvas;
 using iText.Kernel.Pdf.Extgstate;
@@ -58,7 +58,7 @@ public sealed class PdfEditorService : IDisposable
         using var writer = new PdfWriter(path);
         using var pdf = new PdfDocument(writer);
         for (int i = 0; i < Math.Max(1, pages); i++)
-            pdf.AddNewPage(PageSize.A4);
+            pdf.AddNewPage(iText.Kernel.Geom.PageSize.A4);
         pdf.Close();
         return new PdfEditorService(path);
     }
@@ -108,7 +108,7 @@ public sealed class PdfEditorService : IDisposable
     }
 
     /// <summary>高亮（批注，不改变原有内容流）。</summary>
-    public void AddHighlight(int page1Based, Rectangle pdfRect)
+    public void AddHighlight(int page1Based, PdfRectangle pdfRect)
     {
         Rewrite(pdf =>
         {
@@ -140,7 +140,7 @@ public sealed class PdfEditorService : IDisposable
         float minY = pdfPoints.Min(p => p.Y);
         float maxX = pdfPoints.Max(p => p.X);
         float maxY = pdfPoints.Max(p => p.Y);
-        var rect = new Rectangle(minX, minY, Math.Max(1f, maxX - minX), Math.Max(1f, maxY - minY));
+        var rect = new PdfRectangle(minX, minY, Math.Max(1f, maxX - minX), Math.Max(1f, maxY - minY));
 
         var stroke = new PdfArray();
         foreach (var pt in pdfPoints)
@@ -182,7 +182,7 @@ public sealed class PdfEditorService : IDisposable
     }
 
     /// <summary>用白底矩形覆盖后在同一位置叠加新文字（简易“编辑文字”，文本型 PDF）。</summary>
-    public void WhiteoutAndDrawText(int page1Based, Rectangle pdfRect, string newText, float fontSize)
+    public void WhiteoutAndDrawText(int page1Based, PdfRectangle pdfRect, string newText, float fontSize)
     {
         Rewrite(pdf =>
         {
@@ -206,7 +206,7 @@ public sealed class PdfEditorService : IDisposable
     }
 
     /// <summary>插入位图（文本型 PDF）。</summary>
-    public void AddImageOverlay(int page1Based, string imagePath, Rectangle pdfRect)
+    public void AddImageOverlay(int page1Based, string imagePath, PdfRectangle pdfRect)
     {
         var data = ImageDataFactory.Create(imagePath);
         Rewrite(pdf =>

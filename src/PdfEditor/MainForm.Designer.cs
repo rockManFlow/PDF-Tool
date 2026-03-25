@@ -1,3 +1,4 @@
+#nullable enable
 namespace PdfEditor;
 
 partial class MainForm
