@@ -1,7 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- PdfiumViewer 2.x 仅含 .NET Framework 资产，在 net8.0-windows（常解析为 net8.0-windows7.0）下会 NU1100；net48 与 WinForms + 该包兼容 -->
+    <TargetFramework>net48</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>

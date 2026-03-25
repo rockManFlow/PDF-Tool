@@ -343,7 +343,7 @@ public partial class MainForm : Form
                         break;
 
                     var rect = ToPdfRectangle(p0, p1c);
-                    float fs = Math.Clamp(rect.GetHeight() * 0.6f, 8f, 24f);
+                    float fs = Math.Max(8f, Math.Min(24f, rect.GetHeight() * 0.6f));
                     _service.WhiteoutAndDrawText(page1, rect, nt, fs);
                     ReloadViewer();
                     break;
