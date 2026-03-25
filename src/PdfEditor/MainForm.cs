@@ -47,12 +47,16 @@ public partial class MainForm : Form
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Microsoft YaHei UI", 10f),
             Visible = false,
-            Size = new Size(320, 26),
-            Multiline = false
+            Size = new Size(400, 88),
+            Multiline = true,
+            AcceptsReturn = true,
+            AcceptsTab = false,
+            ScrollBars = ScrollBars.Vertical
         };
         _inlineEditor.KeyDown += InlineEditor_KeyDown;
         _inlineEditor.LostFocus += InlineEditor_LostFocus;
         panelPagesHost.Controls.Add(_inlineEditor);
+        panelPagesHost.Layout += (_, _) => UpdatePageIndicator();
 
         UpdateUiState();
     }
@@ -155,6 +159,7 @@ public partial class MainForm : Form
                 pb.MouseDown += PagePicture_MouseDown;
                 pb.MouseMove += PagePicture_MouseMove;
                 pb.MouseUp += PagePicture_MouseUp;
+                pb.MouseWheel += PagePicture_MouseWheel;
 
                 _pageEntries.Add(new PageViewEntry
                 {
@@ -186,13 +191,16 @@ public partial class MainForm : Form
             return;
         }
 
-        int yCenter = scrollPdf.VerticalScroll.Value + scrollPdf.ClientSize.Height / 2;
+        // 视口中心映射到 FlowLayoutPanel 坐标（与 VerticalScroll.Value 无关，避免错位）
+        Point centerInScroll = new Point(scrollPdf.ClientSize.Width / 2, scrollPdf.ClientSize.Height / 2);
+        Point hostPt = panelPagesHost.PointToClient(scrollPdf.PointToScreen(centerInScroll));
+
         for (int i = 0; i < _pageEntries.Count; i++)
         {
             var pb = _pageEntries[i].Picture;
             int top = pb.Top;
             int bottom = top + pb.Height;
-            if (yCenter >= top && yCenter < bottom)
+            if (hostPt.Y >= top && hostPt.Y < bottom)
             {
                 lblPageIndicator.Text = $"第 {i + 1} 页，共 {_pageCount} 页";
                 return;
@@ -200,6 +208,26 @@ public partial class MainForm : Form
         }
 
         lblPageIndicator.Text = $"共 {_pageCount} 页";
+    }
+
+    private void PagePicture_MouseWheel(object? sender, MouseEventArgs e)
+    {
+        if (!scrollPdf.VerticalScroll.Enabled)
+        {
+            UpdatePageIndicator();
+            return;
+        }
+
+        int lines = SystemInformation.MouseWheelScrollLines;
+        if (lines < 1)
+            lines = 3;
+        int step = (e.Delta / 120) * lines * 18;
+        int v = scrollPdf.VerticalScroll.Value;
+        v -= step;
+        v = Math.Clamp(v, scrollPdf.VerticalScroll.Minimum, scrollPdf.VerticalScroll.Maximum);
+        scrollPdf.VerticalScroll.Value = v;
+        scrollPdf.PerformLayout();
+        UpdatePageIndicator();
     }
 
     private PageViewEntry? FindEntry(PictureBox pb)
@@ -254,7 +282,12 @@ public partial class MainForm : Form
 
     private void InlineEditor_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.KeyCode == Keys.Enter)
+        if (e.KeyCode == Keys.Enter && e.Control)
+        {
+            e.SuppressKeyPress = true;
+            CommitInlineEdit();
+        }
+        else if (e.KeyCode == Keys.Enter && !_inlineEditor.Multiline)
         {
             e.SuppressKeyPress = true;
             CommitInlineEdit();
@@ -284,7 +317,7 @@ public partial class MainForm : Form
         if (!_inlineEditor.Visible || _service == null)
             return;
 
-        string t = _inlineEditor.Text.TrimEnd('\r', '\n');
+        string t = _inlineEditor.Text.TrimEnd('\r', '\n').Trim();
         HideInlineEditor();
 
         if (string.IsNullOrEmpty(t))
@@ -324,12 +357,12 @@ public partial class MainForm : Form
         _inkPointsPdf.Clear();
         lblStatus.Text = t switch
         {
-            EditorTool.Text => "文字：在页面上单击，直接输入（Enter 确认，Esc 取消）。",
+            EditorTool.Text => "文字：单击页面输入；多行时 Ctrl+Enter 确认，Esc 取消。",
             EditorTool.Line => "划线：按下拖动绘制墨迹线。",
             EditorTool.Highlight => "高亮：按下拖动框选区域。",
             EditorTool.Watermark => "水印：为全部页面添加半透明文字（扫描件）。",
             EditorTool.Image => "图片：拖动矩形区域，再选择图片文件。",
-            EditorTool.EditText => "编辑文字：单击在光标处插入；或拖动框选区域后输入以替换该区域（仅文本型 PDF）。",
+            EditorTool.EditText => "编辑文字：单击插入；框选后输入替换白底区域（仅文本型）。多行 Ctrl+Enter 确认，Esc 取消；完成后用「另存为」保存。",
             _ => _service == null ? "请先打开或新建 PDF。" : (_isScanned ? "扫描件模式：仅批注/划线/高亮/水印。" : "文本型 PDF：可叠加编辑、插图。")
         };
     }

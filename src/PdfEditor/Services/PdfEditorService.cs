@@ -1,5 +1,4 @@
 using System.Drawing;
-using System.Text;
 using iText.IO.Font;
 using iText.IO.Font.Constants;
 using iText.IO.Image;
@@ -10,6 +9,9 @@ using PdfRectangle = iText.Kernel.Geom.Rectangle;
 using iText.Kernel.Pdf.Annot;
 using iText.Kernel.Pdf.Canvas;
 using iText.Kernel.Pdf.Extgstate;
+using iText.Layout;
+using iText.Layout.Canvas;
+using iText.Layout.Element;
 
 namespace PdfEditor.Services;
 
@@ -43,32 +45,23 @@ public sealed class PdfEditorService : IDisposable
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
     }
 
-    /// <summary>部分 iText 版本 PdfCanvas 仅有 ShowText(string)；优先整串写入，失败再退回仅 Latin-1 可表示字符。</summary>
-    private static void CanvasShowEncodedText(PdfCanvas canvas, PdfFont font, string text)
+    /// <summary>使用 Layout 引擎写入 Unicode 文本（比 Kernel ShowText 可靠，尤其中文）。</summary>
+    private static void LayoutDrawText(PdfDocument pdfDoc, PdfPage page, int page1Based, PdfFont font, float fontSize, string text, float leftPdf, float bottomPdf, float maxWidthPt)
     {
         if (string.IsNullOrEmpty(text))
             return;
 
-        try
+        var pageSize = page.GetPageSize();
+        var pdfCanvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdfDoc);
+        using (var layoutCanvas = new Canvas(pdfCanvas, pageSize))
         {
-            canvas.ShowText(text);
-            return;
+            layoutCanvas.SetFont(font);
+            layoutCanvas.SetFontSize(fontSize);
+            var para = new Paragraph(text);
+            float w = Math.Max(40f, maxWidthPt);
+            para.SetFixedPosition(page1Based, leftPdf, bottomPdf, w);
+            layoutCanvas.Add(para);
         }
-        catch
-        {
-            // 标准 14 字体、编码不匹配等
-        }
-
-        var sb = new StringBuilder(text.Length);
-        foreach (var ch in text)
-        {
-            if (ch < 256)
-                sb.Append(ch);
-            else
-                sb.Append('?');
-        }
-
-        canvas.ShowText(sb.ToString());
     }
 
     public PdfEditorService(string workPath)
@@ -202,14 +195,9 @@ public sealed class PdfEditorService : IDisposable
         {
             var page = pdf.GetPage(page1Based);
             var font = CreateUiFont();
-            var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
-            canvas.SaveState();
-            canvas.BeginText();
-            canvas.SetFontAndSize(font, fontSize);
-            canvas.MoveText(pdfX, pdfY);
-            CanvasShowEncodedText(canvas, font, text);
-            canvas.EndText();
-            canvas.RestoreState();
+            var box = page.GetPageSize();
+            float maxW = box.GetWidth() - pdfX;
+            LayoutDrawText(pdf, page, page1Based, font, fontSize, text, pdfX, pdfY, maxW);
         });
     }
 
@@ -225,15 +213,12 @@ public sealed class PdfEditorService : IDisposable
             canvas.SetFillColor(ColorConstants.WHITE);
             canvas.Rectangle(pdfRect);
             canvas.Fill();
+            canvas.RestoreState();
             if (!string.IsNullOrEmpty(newText))
             {
-                canvas.BeginText();
-                canvas.SetFontAndSize(font, fontSize);
-                canvas.MoveText(pdfRect.GetLeft(), pdfRect.GetBottom() + 2f);
-                CanvasShowEncodedText(canvas, font, newText);
-                canvas.EndText();
+                float maxW = Math.Max(40f, pdfRect.GetWidth());
+                LayoutDrawText(pdf, page, page1Based, font, fontSize, newText, pdfRect.GetLeft(), pdfRect.GetBottom() + 2f, maxW);
             }
-            canvas.RestoreState();
         });
     }
 
@@ -266,18 +251,22 @@ public sealed class PdfEditorService : IDisposable
                 float cy = size.GetHeight() / 2f;
                 float approxWidth = fontSize * 0.45f * text.Length;
 
-                var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
-                canvas.SaveState();
+                var pdfCanvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
+                pdfCanvas.SaveState();
                 var gs = new PdfExtGState();
                 gs.SetFillOpacity(opacity);
-                canvas.SetExtGState(gs);
-                canvas.SetFillColor(ColorConstants.GRAY);
-                canvas.BeginText();
-                canvas.SetFontAndSize(font, fontSize);
-                canvas.MoveText(Math.Max(36f, cx - approxWidth / 2f), Math.Max(36f, cy - fontSize / 2f));
-                CanvasShowEncodedText(canvas, font, text);
-                canvas.EndText();
-                canvas.RestoreState();
+                pdfCanvas.SetExtGState(gs);
+                using (var layoutCanvas = new Canvas(pdfCanvas, size))
+                {
+                    layoutCanvas.SetFont(font);
+                    layoutCanvas.SetFontSize(fontSize);
+                    var par = new Paragraph(text);
+                    par.SetFontColor(ColorConstants.GRAY);
+                    par.SetFixedPosition(i, Math.Max(36f, cx - approxWidth / 2f), Math.Max(36f, cy - fontSize / 2f), size.GetWidth() - 72f);
+                    layoutCanvas.Add(par);
+                }
+
+                pdfCanvas.RestoreState();
             }
         });
     }
