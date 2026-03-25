@@ -43,7 +43,7 @@ public sealed class PdfEditorService : IDisposable
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
     }
 
-    /// <summary>Kernel PdfCanvas.ShowText(string) 对中文易触发 PdfException；用 PdfString + Identity-H，失败再退回 WinAnsi。</summary>
+    /// <summary>部分 iText 版本 PdfCanvas 仅有 ShowText(string)；优先整串写入，失败再退回仅 Latin-1 可表示字符。</summary>
     private static void CanvasShowEncodedText(PdfCanvas canvas, PdfFont font, string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -51,12 +51,12 @@ public sealed class PdfEditorService : IDisposable
 
         try
         {
-            canvas.ShowText(new PdfString(text, PdfEncodings.IDENTITY_H));
+            canvas.ShowText(text);
             return;
         }
         catch
         {
-            // 标准 14 字体等
+            // 标准 14 字体、编码不匹配等
         }
 
         var sb = new StringBuilder(text.Length);
@@ -68,7 +68,7 @@ public sealed class PdfEditorService : IDisposable
                 sb.Append('?');
         }
 
-        canvas.ShowText(new PdfString(sb.ToString(), PdfEncodings.WINANSI));
+        canvas.ShowText(sb.ToString());
     }
 
     public PdfEditorService(string workPath)

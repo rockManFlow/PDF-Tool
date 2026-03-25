@@ -293,9 +293,9 @@ public partial class MainForm : Form
         try
         {
             int p = _pendingInline.Page1Based;
-            if (_pendingInline.WhiteoutRect.HasValue)
+            if (_pendingInline.WhiteoutRect is { } wo)
             {
-                _service.WhiteoutAndDrawText(p, _pendingInline.WhiteoutRect.Value, t, _pendingInline.FontSize);
+                _service.WhiteoutAndDrawText(p, wo, t, _pendingInline.FontSize);
             }
             else
             {
