@@ -6,7 +6,6 @@ using iText.Kernel.Colors;
 using iText.Kernel.Font;
 using iText.Kernel.Pdf;
 using PdfRectangle = iText.Kernel.Geom.Rectangle;
-using iText.Kernel.Pdf.Annot;
 using iText.Kernel.Pdf.Canvas;
 using iText.Kernel.Pdf.Extgstate;
 using iText.Layout;
@@ -15,7 +14,7 @@ using iText.Layout.Element;
 namespace PdfEditor.Services;
 
 /// <summary>
-/// PDF 读写与修改（全部使用 iText7）。批注使用 Annotation；文本型 PDF 的“编辑/插图”在内容流末尾叠加绘制。
+/// PDF 读写与修改（全部使用 iText7）。高亮/划线写入内容流以便栅格预览可见；水印与文字叠加同内容流。
 /// </summary>
 public sealed class PdfEditorService : IDisposable
 {
@@ -128,61 +127,45 @@ public sealed class PdfEditorService : IDisposable
         }
     }
 
-    /// <summary>高亮（批注，不改变原有内容流）。</summary>
+    /// <summary>
+    /// 高亮：半透明黄色矩形，追加到页面内容流末尾。
+    /// （若仅用文本批注/墨迹批注，Docnet 等栅格预览常不绘制注释层，看起来像「没生效」。）
+    /// </summary>
     public void AddHighlight(int page1Based, PdfRectangle pdfRect)
     {
         Rewrite(pdf =>
         {
             var page = pdf.GetPage(page1Based);
-            float llx = pdfRect.GetLeft();
-            float lly = pdfRect.GetBottom();
-            float urx = pdfRect.GetRight();
-            float ury = pdfRect.GetTop();
-
-            float[] quad =
-            {
-                llx, ury, urx, ury, llx, lly, urx, lly
-            };
-
-            var annot = PdfTextMarkupAnnotation.CreateHighLight(pdfRect, quad);
-            annot.SetColor(new float[] { 1f, 1f, 0f });
-            annot.GetPdfObject().Put(PdfName.CA, new PdfNumber(0.35f));
-            page.AddAnnotation(annot);
+            var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
+            canvas.SaveState();
+            var gs = new PdfExtGState();
+            gs.SetFillOpacity(0.35f);
+            canvas.SetExtGState(gs);
+            canvas.SetFillColor(ColorConstants.YELLOW);
+            canvas.Rectangle(pdfRect);
+            canvas.Fill();
+            canvas.RestoreState();
         });
     }
 
-    /// <summary>手绘划线（墨迹批注）。</summary>
+    /// <summary>手绘划线：红色折线，追加到内容流末尾（栅格预览可见）。</summary>
     public void AddInkStroke(int page1Based, IReadOnlyList<PointF> pdfPoints, float lineWidth = 1.2f)
     {
         if (pdfPoints == null || pdfPoints.Count < 2)
             return;
 
-        float minX = pdfPoints.Min(p => p.X);
-        float minY = pdfPoints.Min(p => p.Y);
-        float maxX = pdfPoints.Max(p => p.X);
-        float maxY = pdfPoints.Max(p => p.Y);
-        var rect = new PdfRectangle(minX, minY, Math.Max(1f, maxX - minX), Math.Max(1f, maxY - minY));
-
-        var stroke = new PdfArray();
-        foreach (var pt in pdfPoints)
-        {
-            stroke.Add(new PdfNumber(pt.X));
-            stroke.Add(new PdfNumber(pt.Y));
-        }
-
-        // InkList：PDF 中为「笔画数组的数组」；iText 构造函数接受外层 PdfArray，元素为各笔画的 PdfArray
-        var inkList = new PdfArray();
-        inkList.Add(stroke);
-
         Rewrite(pdf =>
         {
             var page = pdf.GetPage(page1Based);
-            var ink = new PdfInkAnnotation(rect, inkList);
-            var bs = new PdfDictionary();
-            bs.Put(PdfName.W, new PdfNumber(lineWidth));
-            ink.GetPdfObject().Put(PdfName.BS, bs);
-            ink.SetColor(new float[] { 1f, 0f, 0f });
-            page.AddAnnotation(ink);
+            var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdf);
+            canvas.SaveState();
+            canvas.SetStrokeColor(ColorConstants.RED);
+            canvas.SetLineWidth(lineWidth);
+            canvas.MoveTo(pdfPoints[0].X, pdfPoints[0].Y);
+            for (int i = 1; i < pdfPoints.Count; i++)
+                canvas.LineTo(pdfPoints[i].X, pdfPoints[i].Y);
+            canvas.Stroke();
+            canvas.RestoreState();
         });
     }
 

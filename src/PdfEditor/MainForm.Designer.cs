@@ -177,7 +177,7 @@ partial class MainForm
         MinimumSize = new System.Drawing.Size(800, 500);
         Name = "MainForm";
         StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
-        Text = "离线 PDF 编辑 (iText7)";
+        Text = "离线富文本与 PDF 工具";
         FormClosing += MainForm_FormClosing;
         ResizeEnd += MainForm_ResizeEnd;
         panelBody.ResumeLayout(false);
