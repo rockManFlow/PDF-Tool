@@ -142,7 +142,7 @@ public partial class MainForm : Form
         }
         catch (Exception ex)
         {
-            MessageBox.Show(this, ex.Message, "打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            MessageBox.Show(this, PdfiumLoadHelp.Format(ex), "打开失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
     }
 

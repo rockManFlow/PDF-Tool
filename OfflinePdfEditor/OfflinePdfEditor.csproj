@@ -3,7 +3,10 @@
     <OutputType>WinExe</OutputType>
     <!-- 避免默认落到 net8.0-windows7.0 导致 NU1100（部分包未提供该 TFM 资产） -->
     <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <!-- 必须指定 RID，NuGet 才会把 pdfium.dll 等本机库复制到输出目录 -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWindowsForms>true</UseWindowsForms>
@@ -12,7 +15,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
-  <!-- 单文件 EXE（含 Pdfium 本机库）：dotnet publish -c Release -r win-x64 /p:PublishSingleFile=true /p:SelfContained=true /p:IncludeNativeLibrariesForSelfExtract=true -->
+  <!-- 单文件发布（csproj 已含 RID，可省略 -r）：dotnet publish -c Release /p:PublishSingleFile=true /p:SelfContained=true /p:IncludeNativeLibrariesForSelfExtract=true -->
   <ItemGroup>
     <PackageReference Include="PdfiumViewer.Updated" Version="2.14.5" />
     <PackageReference Include="PDFsharp" Version="6.2.0" />
