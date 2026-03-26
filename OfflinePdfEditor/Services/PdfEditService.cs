@@ -69,8 +69,10 @@ public static class PdfEditService
         double hh = Math.Max(1, yb - yt);
 
         using (var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append))
-        using (var brush = new XSolidBrush(XColor.FromArgb(120, 255, 255, 0)))
+        {
+            var brush = new XSolidBrush(XColor.FromArgb(120, 255, 255, 0));
             gfx.DrawRectangle(brush, xl, yt, w, hh);
+        }
 
         SaveDoc(doc, pdfPath);
     }
@@ -87,7 +89,7 @@ public static class PdfEditService
         var page = doc.Pages[pageIndex];
         double h = page.Height.Point;
         using var gfx = XGraphics.FromPdfPage(page, XGraphicsPdfPageOptions.Append);
-        using var pen = new XPen(XColors.Red, 1.2);
+        var pen = new XPen(XColors.Red, 1.2);
         for (int i = 1; i < pointsBottomLeft.Count; i++)
         {
             var a = pointsBottomLeft[i - 1];
