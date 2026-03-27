@@ -1,5 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Office.Interop.Word;
+using WordApp = Microsoft.Office.Interop.Word.Application;
+using WordDoc = Microsoft.Office.Interop.Word.Document;
 
 namespace OfflinePdfEditor.Services;
 
@@ -20,11 +22,11 @@ public static class WordInteropConversionService
         if (!ext.Equals(".docx", StringComparison.OrdinalIgnoreCase))
             docxPath = Path.ChangeExtension(docxPath, ".docx");
 
-        Application? app = null;
-        Document? doc = null;
+        WordApp? app = null;
+        WordDoc? doc = null;
         try
         {
-            app = new Application { Visible = false, DisplayAlerts = WdAlertLevel.wdAlertsNone };
+            app = new WordApp { Visible = false, DisplayAlerts = WdAlertLevel.wdAlertsNone };
             doc = app.Documents.Open(
                 FileName: pdfPath,
                 ConfirmConversions: false,
@@ -78,11 +80,11 @@ public static class WordInteropConversionService
         if (!ext.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
             pdfPath = Path.ChangeExtension(pdfPath, ".pdf");
 
-        Application? app = null;
-        Document? doc = null;
+        WordApp? app = null;
+        WordDoc? doc = null;
         try
         {
-            app = new Application { Visible = false, DisplayAlerts = WdAlertLevel.wdAlertsNone };
+            app = new WordApp { Visible = false, DisplayAlerts = WdAlertLevel.wdAlertsNone };
             doc = app.Documents.Open(
                 FileName: wordPath,
                 ConfirmConversions: false,
