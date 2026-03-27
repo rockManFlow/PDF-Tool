@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Drawing;
 using PdfiumViewer;
 using PdfSharp.Drawing;
@@ -51,6 +52,8 @@ public partial class MainForm : Form
         tsComment.Click += (_, _) => SetTool(InteractiveTool.Comment);
         tsDeletePage.Click += (_, _) => DeleteCurrentPage();
         tsCancelTool.Click += (_, _) => SetTool(InteractiveTool.None);
+        tsPdfToWord.Click += (_, _) => ConvertPdfToWord();
+        tsWordToPdf.Click += (_, _) => ConvertWordToPdf();
         Shown += MainForm_Shown;
         FormClosing += MainForm_FormClosing;
     }
@@ -120,6 +123,85 @@ public partial class MainForm : Form
         MessageBox.Show(this, "当前为扫描件 PDF：不允许修改正文内容，请仅使用高亮、划线、批注等。", "提示", MessageBoxButtons.OK,
             MessageBoxIcon.Information);
         return false;
+    }
+
+    private static string FormatWordInteropError(Exception ex) =>
+        ex.Message + Environment.NewLine + Environment.NewLine +
+        "请确认本机已安装 Microsoft Word 桌面版（可本地打开文档），且未被策略禁用自动化。";
+
+    /// <summary>使用 Word 将 PDF 转为 DOCX；优先使用当前编辑中的工作副本。</summary>
+    private void ConvertPdfToWord()
+    {
+        string? src = !string.IsNullOrEmpty(_workPath) && File.Exists(_workPath) ? _workPath : null;
+        if (src == null)
+        {
+            using var ofd = new OpenFileDialog { Filter = "PDF|*.pdf|所有文件|*.*", Title = "选择要转换的 PDF" };
+            if (ofd.ShowDialog() != DialogResult.OK)
+                return;
+            src = ofd.FileName;
+        }
+
+        using var sfd = new SaveFileDialog { Filter = "Word|*.docx", DefaultExt = "docx", FileName = Path.GetFileNameWithoutExtension(src) + ".docx", Title = "保存为 Word" };
+        if (sfd.ShowDialog() != DialogResult.OK)
+            return;
+
+        UseWaitCursor = true;
+        try
+        {
+            WordInteropConversionService.PdfToDocx(src, sfd.FileName);
+            lblStatus.Text = "已导出 Word：" + Path.GetFileName(sfd.FileName);
+            if (MessageBox.Show(this, "转换完成。是否在默认程序中打开该 DOCX？", "完成", MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Information) == DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(sfd.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, FormatWordInteropError(ex), "PDF→Word 失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
+    }
+
+    /// <summary>使用 Word 将 DOC/DOCX 导出为 PDF。</summary>
+    private void ConvertWordToPdf()
+    {
+        using var ofd = new OpenFileDialog
+        {
+            Filter = "Word|*.docx;*.doc|所有文件|*.*",
+            Title = "选择 Word 文档"
+        };
+        if (ofd.ShowDialog() != DialogResult.OK)
+            return;
+
+        using var sfd = new SaveFileDialog
+        {
+            Filter = "PDF|*.pdf",
+            DefaultExt = "pdf",
+            FileName = Path.GetFileNameWithoutExtension(ofd.FileName) + ".pdf",
+            Title = "保存为 PDF"
+        };
+        if (sfd.ShowDialog() != DialogResult.OK)
+            return;
+
+        UseWaitCursor = true;
+        try
+        {
+            WordInteropConversionService.DocxToPdf(ofd.FileName, sfd.FileName);
+            lblStatus.Text = "已导出 PDF：" + Path.GetFileName(sfd.FileName);
+            if (MessageBox.Show(this, "导出完成。是否打开该 PDF？", "完成", MessageBoxButtons.YesNo, MessageBoxIcon.Information) ==
+                DialogResult.Yes)
+                Process.Start(new ProcessStartInfo(sfd.FileName) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, FormatWordInteropError(ex), "Word→PDF 失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            UseWaitCursor = false;
+        }
     }
 
     private void OpenPdf()

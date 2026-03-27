@@ -22,6 +22,9 @@ partial class MainForm
     private ToolStripButton tsTextBox;
     private ToolStripButton tsComment;
     private ToolStripSeparator tsSep3;
+    private ToolStripButton tsPdfToWord;
+    private ToolStripButton tsWordToPdf;
+    private ToolStripSeparator tsSep4;
     private ToolStripButton tsDeletePage;
     private ToolStripButton tsCancelTool;
     private Panel panelHost;
@@ -61,6 +64,9 @@ partial class MainForm
         tsTextBox = new ToolStripButton();
         tsComment = new ToolStripButton();
         tsSep3 = new ToolStripSeparator();
+        tsPdfToWord = new ToolStripButton();
+        tsWordToPdf = new ToolStripButton();
+        tsSep4 = new ToolStripSeparator();
         tsDeletePage = new ToolStripButton();
         tsCancelTool = new ToolStripButton();
         panelHost = new Panel();
@@ -106,6 +112,12 @@ partial class MainForm
         tsTextBox.DisplayStyle = ToolStripItemDisplayStyle.Text;
         tsComment.Text = "批注";
         tsComment.DisplayStyle = ToolStripItemDisplayStyle.Text;
+        tsPdfToWord.Text = "PDF→Word";
+        tsPdfToWord.DisplayStyle = ToolStripItemDisplayStyle.Text;
+        tsPdfToWord.ToolTipText = "需本机安装 Microsoft Word。用 Word 打开 PDF 并另存为 DOCX。";
+        tsWordToPdf.Text = "Word→PDF";
+        tsWordToPdf.DisplayStyle = ToolStripItemDisplayStyle.Text;
+        tsWordToPdf.ToolTipText = "需本机安装 Microsoft Word。将 DOC/DOCX 导出为 PDF。";
         tsDeletePage.Text = "删除页面";
         tsDeletePage.DisplayStyle = ToolStripItemDisplayStyle.Text;
         tsCancelTool.Text = "取消工具";
@@ -117,6 +129,7 @@ partial class MainForm
             tsOpen, tsSave, tsSaveAs, tsSep1,
             tsFont, tsColor, tsBold, tsItalic, tsUnderline, tsSep2,
             tsImage, tsHighlight, tsInk, tsText, tsTextBox, tsComment, tsSep3,
+            tsPdfToWord, tsWordToPdf, tsSep4,
             tsDeletePage, tsCancelTool
         });
 
@@ -129,7 +142,7 @@ partial class MainForm
 
         lblStatus.Name = "lblStatus";
         lblStatus.Spring = true;
-        lblStatus.Text = "就绪（离线）。显示：PDFium + PdfiumViewer；保存：PDFsharp。";
+        lblStatus.Text = "就绪（离线）。PDF↔Word 依赖本机 Word；编辑保存：PDFsharp。";
 
         statusStrip.Items.Add(lblStatus);
         statusStrip.Location = new Point(0, 648);
